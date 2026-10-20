@@ -1,0 +1,10 @@
+{
+  "name": "PlainPrint - Offline Document Companion",
+  "description": "On-device Gemini Nano document scanner & plain-English jargon decoder with offline OCR and Material Design 3.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

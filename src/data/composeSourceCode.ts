@@ -613,5 +613,84 @@ fun PlainPrintTheme(
         content = content
     )
 }`
+  },
+  {
+    filename: 'AdMobBannerView.kt',
+    path: 'app/src/main/java/com/plainprint/app/ui/components/AdMobBannerView.kt',
+    description: 'Jetpack Compose Google AdMob Banner implementation with live AdView lifecycle',
+    language: 'kotlin',
+    code: `package com.plainprint.app.ui.components
+
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+
+/**
+ * Google Mobile Ads (AdMob) Banner for PlainPrint.
+ * Configured with User AdMob App ID and Ad Unit ID.
+ * AdMob App ID: ca-app-pub-5546661353360921~9323331918
+ * AdMob Unit ID: ca-app-pub-5546661353360921/4705430057
+ */
+@Composable
+fun AdMobBannerView(
+    modifier: Modifier = Modifier,
+    adUnitId: String = "ca-app-pub-5546661353360921/4705430057"
+) {
+    AndroidView(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(50.dp),
+        factory = { context ->
+            AdView(context).apply {
+                setAdSize(AdSize.BANNER)
+                this.adUnitId = adUnitId
+                loadAd(AdRequest.Builder().build())
+            }
+        }
+    )
+}`
+  },
+  {
+    filename: 'AndroidManifest.xml',
+    path: 'app/src/main/AndroidManifest.xml',
+    description: 'Android Manifest with Camera permission and Google AdMob App ID',
+    language: 'xml',
+    code: `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="PlainPrint"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PlainPrint">
+
+        <!-- Google AdMob Application ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-5546661353360921~9323331918"/>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.PlainPrint">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>`
   }
 ];

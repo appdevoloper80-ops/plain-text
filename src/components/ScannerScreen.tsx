@@ -6,16 +6,8 @@ import {
   UploadCloud,
   FileText,
   Sparkles,
-  Zap,
-  RefreshCw,
-  Edit3,
-  RotateCcw,
-  Check,
   SwitchCamera,
-  ChevronRight,
-  Shield,
-  Layers,
-  ArrowRight
+  Edit3
 } from 'lucide-react';
 import type { DocumentData, UserAccountState } from '../types.ts';
 import { SAMPLE_DOCUMENTS } from '../logic/sampleDocuments.ts';
@@ -37,7 +29,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
   onDocumentScanned,
   onOpenPaywall
 }) => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [flashOn, setFlashOn] = useState(false);
@@ -60,14 +51,12 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize camera
   useEffect(() => {
     const saved = localStorage.getItem('plainprint_camera_perm');
     if (saved === 'granted') {
-      setHasPermission(true);
       startCamera(facingMode);
     } else if (saved === 'denied') {
-      setHasPermission(false);
+      // already denied
     } else {
       setShowPermissionPrompt(true);
     }
@@ -93,8 +82,8 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
           videoRef.current.play().catch(() => {});
         }
       }
-    } catch (err) {
-      console.log('Camera hardware not accessible or simulated in browser sandbox');
+    } catch {
+      console.log('Camera hardware not accessible or sandbox simulated');
     }
   };
 
@@ -109,7 +98,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
   const handleGrantPermission = (permanent: boolean) => {
     playHapticSound();
     setShowPermissionPrompt(false);
-    setHasPermission(true);
     if (permanent) {
       localStorage.setItem('plainprint_camera_perm', 'granted');
     }
@@ -119,7 +107,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
   const handleDenyPermission = () => {
     playHapticSound();
     setShowPermissionPrompt(false);
-    setHasPermission(false);
     localStorage.setItem('plainprint_camera_perm', 'denied');
   };
 
@@ -128,9 +115,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
     setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
   };
 
-  /**
-   * Run OCR on base64 image data (from camera shutter or file upload)
-   */
   const processImageOcr = async (imageDataUrl: string, mimeType = 'image/jpeg') => {
     setOcrPreviewImage(imageDataUrl);
     setOcrModalOpen(true);
@@ -154,10 +138,9 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
         setOcrExtractedText(res.text);
         setOcrSource(res.source);
       } else {
-        // Fallback: If no text was recognized on image, load selected sample or prompt manual edit
         const fallback = selectedSample || SAMPLE_DOCUMENTS[0];
         setOcrExtractedText(fallback.rawText);
-        setOcrSource('Document Preset (Auto-Detected)');
+        setOcrSource('Document Preset');
       }
     } catch (err: any) {
       console.warn('OCR error:', err);
@@ -168,10 +151,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
     }
   };
 
-  /**
-   * Real camera shutter capture:
-   * Captures live frame from <video> and runs OCR pipeline
-   */
   const handleCaptureShutter = async () => {
     playCameraShutterSound();
 
@@ -179,7 +158,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
     const isVideoPlaying = video && video.readyState >= 2 && video.videoWidth > 0;
 
     if (isVideoPlaying && !selectedSample) {
-      // Capture live high-res frame from video
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -192,21 +170,16 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
       }
     }
 
-    // If sample was selected or camera not streaming, process selected sample directly
     const targetDoc = selectedSample || SAMPLE_DOCUMENTS[0];
     onDocumentScanned(targetDoc);
   };
 
-  /**
-   * Handle user photo/file upload
-   */
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     playCameraShutterSound();
 
-    // If plain text file
     if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
       const textReader = new FileReader();
       textReader.onload = (event) => {
@@ -227,7 +200,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
       return;
     }
 
-    // If image file -> Run Real OCR
     const imageReader = new FileReader();
     imageReader.onload = (event) => {
       const dataUrl = event.target?.result as string;
@@ -241,7 +213,6 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
     setOcrModalOpen(false);
     const words = countWords(extractedText);
 
-    // Auto-detect category from keywords
     const lower = extractedText.toLowerCase();
     let category: DocumentData['category'] = 'legal';
     if (lower.includes('patient') || lower.includes('surgical') || lower.includes('doctor') || lower.includes('hospital')) {
@@ -292,10 +263,10 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
           <span className="text-xs font-bold text-white tracking-tight">AI Vision OCR</span>
         </div>
 
-        {/* Free Scans Pill */}
+        {/* Free Scans / Pro Pill */}
         {userAccount.isPro ? (
           <div className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1.5 rounded-full text-white text-xs font-bold shadow-lg shadow-blue-600/30">
-            <span>PRO UNLIMITED</span>
+            <span>PRO ACTIVE</span>
           </div>
         ) : (
           <button
@@ -312,7 +283,7 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
       </div>
 
       {/* Camera Viewfinder Area */}
-      <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-black min-h-[300px]">
+      <div className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-black min-h-[280px]">
         {/* Live Video Feed */}
         <video
           ref={videoRef}
@@ -342,21 +313,17 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
 
         {/* Material Design Document Scanner Target Frame */}
         <div className="relative z-10 w-[84%] max-w-[340px] aspect-[3/4] rounded-2xl border-2 border-blue-400/50 flex flex-col items-center justify-between p-3.5 shadow-2xl backdrop-brightness-105 pointer-events-none">
-          {/* Glowing Corner Accents */}
           <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-400 rounded-tl-lg shadow-[0_0_10px_#60a5fa]" />
           <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-400 rounded-tr-lg shadow-[0_0_10px_#60a5fa]" />
           <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-400 rounded-bl-lg shadow-[0_0_10px_#60a5fa]" />
           <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-400 rounded-br-lg shadow-[0_0_10px_#60a5fa]" />
 
-          {/* Animated Laser Scanning Line */}
           <div className="absolute inset-x-2 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-[0_0_10px_#60a5fa] animate-pulse" />
 
-          {/* Top Frame Guidance Tag */}
           <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-blue-400/40 text-[10px] font-bold text-blue-300 uppercase tracking-widest">
             {selectedSample ? `Selected: ${selectedSample.title.slice(0, 24)}...` : 'Align Document or Paper'}
           </div>
 
-          {/* Bottom Guidance Tag */}
           <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/60 text-[10px] text-slate-300 font-mono">
             Hold Steady · High Res OCR
           </div>
@@ -446,7 +413,7 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
       </div>
 
       {/* Bottom Control Deck (Thumb-Friendly Controls) */}
-      <div className="px-4 py-3.5 bg-[#0e1217] border-t border-slate-800 flex items-center justify-around gap-2 shrink-0 z-20">
+      <div className="px-4 py-3 bg-[#0e1217] border-t border-slate-800 flex items-center justify-around gap-2 shrink-0 z-20">
         {/* Hidden File Input */}
         <input
           ref={fileInputRef}
@@ -477,11 +444,9 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({
           className="relative group p-1 active:scale-95 transition-transform"
           aria-label="Capture Document"
         >
-          {/* Outer ring */}
-          <div className="w-18 h-18 rounded-full border-4 border-blue-400/80 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:border-blue-400 transition-colors">
-            {/* Inner core */}
-            <div className="w-14 h-14 rounded-full bg-white group-hover:bg-blue-50 transition-colors flex items-center justify-center shadow-inner">
-              <Camera className="w-6 h-6 text-slate-900" />
+          <div className="w-16 h-16 rounded-full border-4 border-blue-400/80 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:border-blue-400 transition-colors">
+            <div className="w-12 h-12 rounded-full bg-white group-hover:bg-blue-50 transition-colors flex items-center justify-center shadow-inner">
+              <Camera className="w-5 h-5 text-slate-900" />
             </div>
           </div>
         </button>

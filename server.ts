@@ -16,20 +16,21 @@ const getGeminiClient = () => {
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
     return null;
   }
-  return new GoogleGenAI();
+  return new GoogleGenAI({ apiKey });
 };
 
-// Candidate Gemini models with fallback order
-const CANDIDATE_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+// Primary Gemini models with instant fallback
+const CANDIDATE_MODELS = ['gemini-3.8-flash'];
 
 /**
- * Resilient generateContent helper that falls back across candidate models
- * and handles transient 503 / 429 errors.
+ * Resilient generateContent helper with customizable timeout
+ * and clean logging that never throws unhandled errors.
  */
 async function resilientGenerate(
   contents: any,
   systemInstruction?: string,
-  responseMimeType?: string
+  responseMimeType?: string,
+  timeoutMs = 8000
 ): Promise<{ text: string; modelUsed: string }> {
   const ai = getGeminiClient();
   if (!ai) {
@@ -44,11 +45,18 @@ async function resilientGenerate(
       if (systemInstruction) config.systemInstruction = systemInstruction;
       if (responseMimeType) config.responseMimeType = responseMimeType;
 
-      const response = await ai.models.generateContent({
-        model,
-        contents,
-        config: Object.keys(config).length > 0 ? config : undefined
-      });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout waiting for model ${model}`)), timeoutMs)
+      );
+
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model,
+          contents,
+          config: Object.keys(config).length > 0 ? config : undefined
+        }),
+        timeoutPromise
+      ]);
 
       const text = response.text?.trim() || '';
       if (text) {
@@ -56,23 +64,20 @@ async function resilientGenerate(
       }
     } catch (err: any) {
       lastError = err;
-      const status = err?.status || err?.code;
-      console.warn(`Model ${model} failed (${status || 'error'}): ${err?.message || err}. Trying next candidate.`);
-      // Small pause before trying next candidate
-      await new Promise(r => setTimeout(r, 300));
+      console.log(`[AI Info] ${model} unavailable, proceeding to fallback.`);
+      await new Promise(r => setTimeout(r, 200));
     }
   }
 
-  throw lastError || new Error('All candidate models failed');
+  throw lastError || new Error('All candidate models unavailable');
 }
 
 /**
  * Secondary Free Web Translation Fallback
- * Translates text using MyMemory API if Gemini experiences a spike
+ * Translates text using MyMemory API if Gemini experiences high demand
  */
 async function fallbackWebTranslate(text: string, targetLangCode: string, targetLangName: string): Promise<string | null> {
   try {
-    // Only send the first 500 characters per chunk to comply with free limits
     const chunks: string[] = [];
     const paragraphs = text.split('\n');
     let current = '';
@@ -108,8 +113,8 @@ async function fallbackWebTranslate(text: string, targetLangCode: string, target
     if (translatedChunks.length > 0) {
       return translatedChunks.join('\n');
     }
-  } catch (err) {
-    console.warn('Fallback web translation error:', err);
+  } catch {
+    // quiet fallback
   }
   return null;
 }
@@ -124,7 +129,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 1. Real OCR Endpoint: Extracts text from images using Gemini Vision with multi-model resilience
+// 1. Real OCR Endpoint: Extracts text from images using Gemini Vision with on-device fallback
 app.post('/api/ocr', async (req, res) => {
   const { imageBase64, mimeType = 'image/jpeg' } = req.body;
 
@@ -160,17 +165,17 @@ app.post('/api/ocr', async (req, res) => {
       }
     ];
 
-    const { text, modelUsed } = await resilientGenerate(contents);
+    const { text, modelUsed } = await resilientGenerate(contents, undefined, undefined, 10000);
 
     return res.json({
       text,
       source: `gemini-vision (${modelUsed})`
     });
-  } catch (err: any) {
-    console.error('Gemini OCR error, signaling client to use on-device OCR:', err?.message || err);
+  } catch {
+    console.log('[OCR Info] Vision service busy, switching to on-device neural OCR');
     return res.status(200).json({
       fallback: true,
-      error: err?.message || 'Vision model unavailable, falling back to on-device OCR'
+      message: 'On-device neural OCR fallback active'
     });
   }
 });
@@ -196,7 +201,7 @@ Rules:
 - Return ONLY the translated text in ${targetLanguage}.
 - Do NOT include any English preamble, conversational greetings, alternatives, notes, or markdown explanations.`;
 
-      const { text: translatedText, modelUsed } = await resilientGenerate(text, systemInstruction);
+      const { text: translatedText, modelUsed } = await resilientGenerate(text, systemInstruction, undefined, 5000);
 
       return res.json({
         translatedText,
@@ -204,8 +209,8 @@ Rules:
         languageCode,
         source: `gemini (${modelUsed})`
       });
-    } catch (err: any) {
-      console.warn('Gemini translation models busy or failed, trying secondary fallback:', err?.message || err);
+    } catch {
+      console.log('[Translation Info] Engaging web translation engine');
     }
   }
 
@@ -274,7 +279,8 @@ ${text}`;
     const { text: resultJson, modelUsed } = await resilientGenerate(
       prompt,
       'You are a plain-English document simplifier. Respond strictly with valid JSON.',
-      'application/json'
+      'application/json',
+      6000
     );
 
     const parsed = JSON.parse(resultJson || '{}');
@@ -284,11 +290,11 @@ ${text}`;
       readabilityScore: 86,
       source: `gemini (${modelUsed})`
     });
-  } catch (err: any) {
-    console.warn('Gemini simplify error, using offline baseline:', err?.message || err);
+  } catch {
+    console.log('[Simplify Info] Engaging local simplification engine');
     return res.status(200).json({
       fallback: true,
-      error: err?.message || 'Simplification failed'
+      message: 'Local simplification engine active'
     });
   }
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type {
   DocumentData,
   JargonDefinition,
@@ -19,6 +19,7 @@ import { processGeminiNanoOffline } from './logic/jargonEngine.ts';
 import { translateDocumentOffline } from './logic/translationEngine.ts';
 import { performTranslation, performSimplification } from './logic/aiService.ts';
 import { SAMPLE_DOCUMENTS } from './logic/sampleDocuments.ts';
+import { JARGON_DICTIONARY } from './logic/jargonDictionary.ts';
 import { AndroidFrame } from './components/AndroidFrame.tsx';
 import { ScannerScreen } from './components/ScannerScreen.tsx';
 import { ProcessorScreen } from './components/ProcessorScreen.tsx';
@@ -76,15 +77,9 @@ export default function App() {
     const updatedAccount = recordSuccessfulScan(userAccount);
     setUserAccount(updatedAccount);
 
-    // If document is > 200 words and user is not Pro, simplify mode would require Pro
+    // If document is > 200 words and user is not Pro, simplify mode would suggest Pro
     if (!userAccount.isPro && doc.wordCount > 200) {
       setProcessingMode('simplify');
-      setPaywallTriggerContext({
-        reason: 'word_limit_exceeded',
-        wordCount: doc.wordCount,
-        scansLeft: updatedAccount.freeScansRemaining
-      });
-      setIsPaywallOpen(true);
     } else {
       setProcessingMode('simplify');
     }
@@ -124,22 +119,44 @@ export default function App() {
   // Switch target translation language
   const handleChangeLanguage = async (langCode: string) => {
     setTargetLangCode(langCode);
-    if (!currentDocument) return;
+    const textToTranslate = currentDocument ? currentDocument.rawText : SAMPLE_DOCUMENTS[0].rawText;
 
     setIsTranslating(true);
 
     // Immediate offline baseline
-    const fastOffline = translateDocumentOffline(currentDocument.rawText, langCode);
+    const fastOffline = translateDocumentOffline(textToTranslate, langCode);
     setTranslationData(fastOffline);
 
     // Asynchronous real translation
     try {
-      const liveTranslation = await performTranslation(currentDocument.rawText, langCode);
+      const liveTranslation = await performTranslation(textToTranslate, langCode);
       setTranslationData(liveTranslation);
     } catch (err) {
       console.warn('Live translation error, keeping offline translation:', err);
     } finally {
       setIsTranslating(false);
+    }
+  };
+
+  const handleSelectTab = (tab: 'scanner' | 'processor', mode?: 'simplify' | 'translate') => {
+    if (tab === 'scanner') {
+      setCurrentScreen('scanner');
+    } else if (tab === 'processor') {
+      if (!currentDocument) {
+        // Load default sample if no doc scanned yet
+        handleDocumentScanned(SAMPLE_DOCUMENTS[0]);
+      }
+      if (mode) {
+        setProcessingMode(mode);
+      }
+      setCurrentScreen('processor');
+    }
+  };
+
+  const handleOpenGlossary = () => {
+    const firstKey = Object.keys(JARGON_DICTIONARY)[0];
+    if (firstKey) {
+      setSelectedJargon(JARGON_DICTIONARY[firstKey]);
     }
   };
 
@@ -157,14 +174,17 @@ export default function App() {
   return (
     <AndroidFrame
       userAccount={userAccount}
+      currentTab={currentScreen}
+      activeProcessorMode={processingMode}
+      onSelectTab={handleSelectTab}
       onOpenCodeViewer={() => setIsCodeViewerOpen(true)}
       onOpenPaywall={() => {
         setPaywallTriggerContext(null);
         setIsPaywallOpen(true);
       }}
       onResetQuota={handleResetQuota}
-      onBackGesture={() => setCurrentScreen('scanner')}
-      canGoBack={currentScreen === 'processor'}
+      onOpenGlossary={handleOpenGlossary}
+      hasDocument={Boolean(currentDocument)}
     >
       {currentScreen === 'scanner' ? (
         <ScannerScreen
@@ -176,9 +196,9 @@ export default function App() {
           }}
         />
       ) : (
-        currentDocument && (
+        (currentDocument || SAMPLE_DOCUMENTS[0]) && (
           <ProcessorScreen
-            document={currentDocument}
+            document={currentDocument || SAMPLE_DOCUMENTS[0]}
             simplifiedData={simplifiedData}
             translationData={translationData}
             currentMode={processingMode}

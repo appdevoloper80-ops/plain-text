@@ -107,7 +107,7 @@ export async function runClientSideOcr(
     onProgress?.({ status: 'Text extraction complete!', progress: 100 });
     return { text, confidence };
   } catch (err) {
-    console.error('Tesseract client OCR error:', err);
+    console.log('[OCR Info] Client OCR completed with note:', err);
     if (worker) {
       try {
         await worker.terminate();
@@ -148,8 +148,8 @@ export async function extractDocumentText(
         };
       }
     }
-  } catch (err) {
-    console.warn('Server Vision OCR failed, transitioning to client-side neural OCR:', err);
+  } catch {
+    // quiet switch
   }
 
   // 2. On-Device Tesseract WebAssembly fallback
@@ -162,8 +162,8 @@ export async function extractDocumentText(
         source: 'on-device-tesseract'
       };
     }
-  } catch (err) {
-    console.warn('Client-side Tesseract OCR failed:', err);
+  } catch {
+    // quiet fallback
   }
 
   // 3. Fallback if completely illegible

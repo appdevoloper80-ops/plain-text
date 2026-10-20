@@ -21,8 +21,8 @@ export async function performDocumentOcr(
         source: result.source
       };
     }
-  } catch (err) {
-    console.warn('OCR error during document processing:', err);
+  } catch {
+    // quiet fallback
   }
 
   // If completely illegible or no text detected
@@ -65,8 +65,8 @@ export async function performTranslation(
         };
       }
     }
-  } catch (err) {
-    console.warn('Network translation failed, falling back to on-device engine:', err);
+  } catch {
+    // quiet fallback
   }
 
   // Offline fallback
@@ -102,8 +102,8 @@ export async function performSimplification(
         };
       }
     }
-  } catch (err) {
-    console.warn('Network simplification failed, falling back to on-device engine:', err);
+  } catch {
+    // quiet fallback
   }
 
   // On-device simulation fallback

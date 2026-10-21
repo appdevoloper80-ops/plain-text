@@ -6,7 +6,15 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const getPort = () => {
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const p = Number(process.argv[portArgIdx + 1]);
+    if (!isNaN(p) && p > 0) return p;
+  }
+  return Number(process.env.PORT) || 3000;
+};
+const PORT = getPort();
 
 // Support base64 image uploads from mobile camera and gallery
 app.use(express.json({ limit: '35mb' }));
